@@ -1,7 +1,12 @@
 from __future__ import annotations
-from typing import List, Dict
+
+import time
 from dataclasses import dataclass
+from typing import Dict, List, Tuple
+
 from rich.console import Console
+from rich.live import Live
+from rich.table import Table
 
 console = Console()
 
@@ -24,21 +29,34 @@ class Coords:
         ]
 
 
-def print_map(map: Dict[Coords, int]):
+def render_flashed_map(
+    map: Dict[Coords, int], just_flashed: List[Coords], iteration: int
+) -> Table:
+    table = Table(show_header=False)
+    table.add_column()
+
+    flashed_set = set(just_flashed)
     x = 0
     y = 0
     done = False
+    currRow = ""
     while not done:
         if (val := map.get(Coords(x, y))) is not None:
-            console.print(f"{val}", end="")
+            if Coords(x, y) in flashed_set:
+                currRow += f"[yellow]{val}[/yellow]"
+            else:
+                currRow += f"[grey50]{val}[/grey50]"
             x += 1
         elif x != 0:
             y += 1
             x = 0
-            console.print()
+            table.add_row(currRow)
+            currRow = ""
         else:
             done = True
-            console.print()
+
+    table.add_row(f"Iter: {iteration}")
+    return table
 
 
 def read_input(lines: List[str]) -> Dict[Coords, int]:
@@ -49,7 +67,7 @@ def read_input(lines: List[str]) -> Dict[Coords, int]:
     return map
 
 
-def run_flash_iteration(map: Dict[Coords, int]) -> int:
+def run_flash_iteration(map: Dict[Coords, int]) -> Tuple[int, List[Coords]]:
     flashed: List[Coords] = []
     increase_energy: List[Coords] = map.keys()
     while len(increase_energy) > 0:
@@ -66,7 +84,7 @@ def run_flash_iteration(map: Dict[Coords, int]) -> int:
     for flashed_coords in flashed:
         map[flashed_coords] = 0
 
-    return len(flashed)
+    return len(flashed), flashed
 
 
 with open("day11.txt", "r") as file:
@@ -75,10 +93,16 @@ with open("day11.txt", "r") as file:
     flashes = 0
     latest_flashcount = 0
     iteration = 0
-    while latest_flashcount < 100:
-        latest_flashcount = run_flash_iteration(map)
-        if iteration < 100:
-            flashes += latest_flashcount
-        iteration += 1
-        
-    console.print(f"{flashes} after 100 iterations. It took {iteration} iterations for all to flash")
+
+    with Live(render_flashed_map(map, [], iteration), refresh_per_second=10) as live:
+        while latest_flashcount < 100:
+            latest_flashcount, just_flashed = run_flash_iteration(map)
+            live.update(render_flashed_map(map, just_flashed, iteration))
+            if iteration < 100:
+                flashes += latest_flashcount
+            iteration += 1
+            time.sleep(0.1)
+
+    console.print(
+        f"{flashes} after 100 iterations. It took {iteration} iterations for all to flash"
+    )
